@@ -28,11 +28,25 @@ WEIGHTS_DIR = "pretrain_weights"
 REPO_ID = "lixinyizju/moda"
 
 # --- Helpers ---
-def clean_gpu():
+def clean_gpu(threshold_gb=2):
     """Force GPU + Python garbage cleanup."""
-    if torch.cuda.is_available():
+    if not torch.cuda.is_available():
+        print("⚠️ No GPU detected.")
+        return
+    device = torch.device("cuda")
+    props = torch.cuda.get_device_properties(device)
+    total = props.total_memory / (1024**3)
+    reserved = torch.cuda.memory_reserved(device) / (1024**3)
+    available = total - reserved
+
+    print(f"Total GPU: {total:.2f} GB | Available: {available:.2f} GB")
+    if available < threshold_gb:
+        print("🧹 Clearing GPU cache...")
         torch.cuda.empty_cache()
         torch.cuda.ipc_collect()
+        cooldown_gpu(8)
+    else:
+        print("✅ GPU has enough free memory, no cleanup needed.")
     gc.collect()
 
 def cooldown_gpu(duration=7):
@@ -85,7 +99,7 @@ def ensure_wav_format(audio_path):
 
 def process_audio_in_chunks(audio, run_output_dir, source_image_path, emotion_id, cfg_scale):
     """Split audio into chunks, generate video segments, and return concatenated video path."""
-    window_ms, stride_ms = 1000, 1000  # exact 1s chunks, no overlap
+    window_ms, stride_ms = 500, 500  # exact 1s chunks, no overlap
     chunks = [audio[start:start + window_ms] for start in range(0, len(audio), stride_ms)]
     video_segments, temp_files = [], []
 
@@ -105,10 +119,10 @@ def process_audio_in_chunks(audio, run_output_dir, source_image_path, emotion_id
                     smooth=False,
                     silent_audio_path=DEFAULT_SILENT_AUDIO_PATH,
                 )
+                clean_gpu()
 
                 # ✅ Ensure pipeline returned a file
                 if not out_path or not os.path.exists(out_path):
-                    clean_gpu()
                     raise FileNotFoundError(f"Pipeline failed to produce video for chunk {idx}")
 
             except RuntimeError as e:
@@ -127,7 +141,6 @@ def process_audio_in_chunks(audio, run_output_dir, source_image_path, emotion_id
 
             video_segments.append(clip)
             clean_gpu()
-            cooldown_gpu()
 
         # ✅ Final concatenation
         if not video_segments:
@@ -146,7 +159,6 @@ def process_audio_in_chunks(audio, run_output_dir, source_image_path, emotion_id
         for clip in video_segments:
             clip.close()
         clean_gpu()
-        cooldown_gpu()
         
 # --- Init ---
 os.makedirs(OUTPUT_DIR, exist_ok=True)
