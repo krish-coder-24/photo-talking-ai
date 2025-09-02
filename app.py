@@ -201,8 +201,6 @@ with gr.Blocks(theme=gr.themes.Soft(), css=".gradio-container {max-width:960px;m
         <div align='center'>
             <h1>Project: Photo talking AI</h1>
             <p>
-                <a href='https://lixinyang.github.io/MoDA.github.io/'><img src='https://img.shields.io/badge/Project-Page-blue'></a>
-                <a href='https://arxiv.org/abs/2507.03256'><img src='https://img.shields.io/badge/Paper-Arxiv-red'></a>
                 <a href='https://github.com/krish-coder-24/photo-talking-ai/'><img src='https://img.shields.io/badge/Code-Github-green'></a>
             </p>
         </div>
