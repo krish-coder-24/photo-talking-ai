@@ -35,6 +35,19 @@ def clean_gpu():
         torch.cuda.ipc_collect()
     gc.collect()
 
+def cooldown_gpu(duration=7):
+    start, width = time.time(), 20
+    while time.time()-start < duration:
+        # sine wave pulse between 0 and width
+        t = time.time()-start
+        fill = int((1 + __import__('math').sin(t*3)) * (width/2))
+        bar = "#"*fill + "-"*(width-fill)
+        sys.stdout.write(f"\r[ {bar} ] Cooling GPU... {duration-int(t)}s")
+        sys.stdout.flush()
+        time.sleep(0.1)
+    sys.stdout.write("\rGPU cooldowned ✅            \n")
+    sys.stdout.flush()
+
 def download_weights():
     """Ensure model weights are available locally."""
     motion_model_file = os.path.join(WEIGHTS_DIR, "moda", "net-200.pth")
@@ -114,6 +127,7 @@ def process_audio_in_chunks(audio, run_output_dir, source_image_path, emotion_id
 
             video_segments.append(clip)
             clean_gpu()
+            cooldown_gpu()
 
         # ✅ Final concatenation
         if not video_segments:
@@ -132,6 +146,7 @@ def process_audio_in_chunks(audio, run_output_dir, source_image_path, emotion_id
         for clip in video_segments:
             clip.close()
         clean_gpu()
+        cooldown_gpu()
         
 # --- Init ---
 os.makedirs(OUTPUT_DIR, exist_ok=True)
