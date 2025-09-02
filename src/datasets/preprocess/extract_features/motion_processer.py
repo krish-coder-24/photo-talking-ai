@@ -1024,13 +1024,13 @@ class MotionProcesser(object):
     def save_results(self, results, save_path, audio_path=None):
         save_dir = osp.dirname(save_path)
         save_name = osp.basename(save_path)
-        final_video = osp.join(save_dir, f'final_{save_name}')
+        silent_video = osp.join(save_dir, f'silent_{save_name}')
 
-        images2video(results, wfp=save_path, fps=self.cfg.output_fps)
+        images2video(results, wfp=silent_video, fps=self.cfg.output_fps)
 
         if audio_path is not None:
-            add_audio_to_video(save_path, audio_path, final_video)
-            os.remove(save_path)
+            add_audio_to_video(silent_video, audio_path, save_path)
+            os.remove(silent_video)
     
     def rec_score(self, video_path: str, interval=None, save_path=None):
         video_frames = self.read_video(video_path, interval=interval)
