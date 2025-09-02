@@ -4,6 +4,7 @@ import os
 import gc
 import sys
 import time
+import math
 import gradio as gr
 import spaces
 import torch
@@ -105,6 +106,7 @@ def process_audio_in_chunks(audio, run_output_dir, source_image_path, emotion_id
 
     try:
         for idx, chunk in enumerate(chunks):
+            print(f"==== Processing chunk ({idx+1}/{len(chunks)}) ====")
             tmp_chunk_path = os.path.join(run_output_dir, f"chunk_{idx}.wav")
             chunk.export(tmp_chunk_path, format="wav", parameters=["-ar", "16000", "-ac", "1"])
             temp_files.append(tmp_chunk_path)
