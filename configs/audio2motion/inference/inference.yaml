@@ -24,7 +24,7 @@ need_normalized: True
 
 # other configs
 device_id: 0
-batch_size: 100
+batch_size: 1
 
 source_max_dim: 1280 # the max dim of height and width of source image or video
 source_division: 2 # make sure the height and width of source image or video can be divided by this number
