@@ -1,0 +1,36 @@
+# models settings
+model_params:
+  model_name: hubert   # wav2vec or hubert
+  model_type: base   # base large
+  is_chinese: True
+  is_original: True
+  only_last_features: False
+  use_audio_separator: False
+  audio_separator_name: Kim_Vocal_2.onnx
+
+# model weights
+model_weights:
+  audio_separator_path: pretrain_weights/audio/audio_separator
+  hubert_path:
+    chinese:
+      base: pretrain_weights/audio/chinese-hubert-base
+# data settings
+data_params:
+  sample_rate: 16000
+  max_length: 60         # seconds
+  sub_clip_length: 3000  # samples
+  fps: 25
+  sample_strategy: "presample"
+  audio_pad_mode: replicate  # pad mode for audio, replicate or zero
+  save_to_cpu: True    # saving gpu memory
+
+# device settings
+device_params:
+  device_id: 0
+  flag_force_cpu: False
+  flag_use_half_precision: False
+  
+cache_dir: preprocessed/HDTF/vocals
+tmp_dir: src/tmp
+
+

@@ -1,0 +1,59 @@
+# model config
+models_config: configs/audio2motion/model/models.yaml
+
+# 1. face appearance feature
+appearance_feature_extractor_path: pretrain_weights/decode/v1/first_stage/base_models/appearance_feature_extractor.pth
+
+# 2. motion feature
+motion_extractor_path: pretrain_weights/decode/v1/first_stage/base_models/motion_extractor.pth
+
+# 3. stitching retargeting module
+stitching_retargeting_module_path: pretrain_weights/decode/v1/first_stage/retargeting_models/stitching_retargeting_module.pth
+
+# 4. feature warper
+warping_module_path: pretrain_weights/decode/v1/first_stage/base_models/warping_module.pth
+
+# 5. SPADEGenerator
+spade_generator_path: pretrain_weights/decode/v1/first_stage/base_models/spade_generator.pth
+
+# 6. cropper
+crop_cfg: "configs/audio2motion/model/crop_config.yaml"
+
+# 7. face parser
+face_parser_weight_path: "pretrain_weights/face/face-parsing/79999_iter.pth"
+resnet_weight_path: "pretrain_weights/face/face-parsing/resnet18-5c106cde.pth"
+
+# motion template
+need_normalized: True
+
+# others
+batch_size: 100
+source_max_dim: 1920 # the max dim of height and width of source image or video
+source_division: 2 # make sure the height and width of source image or video can be divided by this number
+input_height: 256
+input_width: 256
+output_height: 512
+output_width: 512
+output_fps: 25
+
+# driving params
+flag_do_torch_compile: False
+flag_use_half_precision: True
+flag_relative_motion: False
+flag_normalize_lip: False
+flag_source_video_eye_retargeting: False
+flag_eye_retargeting: False
+flag_lip_retargeting: False
+flag_stitching: True
+
+lip_normalize_threshold: 0.03 # threshold for flag_normalize_lip
+source_video_eye_retargeting_threshold: 0.18 # threshold for eyes retargeting if the input is a source video
+anchor_frame: 0 # TO IMPLEMENT
+
+driving_option: "expression-friendly" # "expression-friendly" or "pose-friendly"
+driving_multiplier: 1.0 # be used only when driving_option is "expression-friendly"
+lib_multiplier: 1.0
+driving_smooth_observation_variance: 3e-7 # the larger the number, the smoother the animated video; too much smoothness would result in loss of motion accuracy
+animation_region: "all" #["exp", "pose", "lip", "eyes", "all"], the region where the animation was performed, "exp" means the expression, "pose" means the head pose
+mask_crop: src/utils/resources/mask_template.png
+lip_array: src/utils/resources/lip_array.pkl

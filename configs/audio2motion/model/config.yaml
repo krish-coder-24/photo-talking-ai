@@ -1,0 +1,59 @@
+model_name: TalkingHeadDiT-B
+audio_projector:
+  type: MLP
+  pretrained_model_path: None
+  device: cuda
+  params:
+    model_name: MLP-S-3
+    sequence_length: 1
+    blocks: 12 
+    audio_feat_dim: 768 
+    keypoint_dim: 63
+    feature_dim: 512
+    output_dim: 256
+    context_tokens: 1
+    audio_embedder_type: simple
+    audio_cond_dim: 63
+motion_generator:
+  type: DiT
+  pretrained_model_path: None
+  device: cuda
+  params:
+    model_name: DiT-S-8-8
+    architecture: decoder
+    use_emo: True
+    input_dim: 70
+    output_dim: 70
+    exp_dim: 63
+    n_prev_frames: 1
+    n_pred_frames: 80
+    use_indicator: False
+    feature_dim: 256
+    n_heads: 8
+    n_layers: 8
+    mlp_ratio: 4
+    no_use_learnable_pe: True
+    norm_type: rms_norm  # [rms_norm|layer_norm]
+    qk_norm: rms_norm    # [rms_norm|layer_norm|null]
+    steps: 1000
+noise_scheduler:
+  type: flow_matching
+  sample_mode: sample
+  device: cuda
+  params:
+    time_shifting: True
+    num_train_timesteps: 1000
+    num_inference_steps: 10
+    eta: 0.2
+    beta_start: 0.0001
+    beta_end: 0.02
+    s: 0.008
+    mode: cosine
+train:
+  audio_drop_prob: 0.3
+  cond_drop_prob: 0.2
+  motion_drop_prob: 0.3
+  audio_drop_ratio : 0.2
+  motion_drop_ratio: 0.1
+  pre_drop_ratio : 0.0
+device_specific: True

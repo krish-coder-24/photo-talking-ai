@@ -1,0 +1,35 @@
+
+output_fps: 25
+## appearance and motion feature extractor
+appearance_feature_extractor_path:  pretrain_weights/decode/v1/first_stage/base_models/appearance_feature_extractor.pth
+motion_extractor_path: pretrain_weights/decode/v1/first_stage/base_models/motion_extractor.pth
+## SPADEGenerator
+spade_generator_path: pretrain_weights/decode/v1/first_stage/base_models/spade_generator.pth
+warping_module_path:  pretrain_weights/decode/v1/first_stage/base_models/warping_module.pth
+## stitching retargeting module
+stitching_retargeting_module_path:  pretrain_weights/decode/v1/first_stage/retargeting_models/stitching_retargeting_module.pth
+#
+
+# audio processer config
+audio_model_config: configs/audio2motion/model/audio_processer_config.yaml
+
+# motion processer config
+motion_processer_config: configs/audio2motion/model/liveportrait_config.yaml
+
+# motion generator model
+motion_models_config: configs/audio2motion/model/config.yaml
+use_ref_kp: False
+motion_generator_path: pretrain_weights/moda/net-200.pth
+need_normalized: True
+
+# other configs
+device_id: 0
+batch_size: 100
+
+source_max_dim: 1280 # the max dim of height and width of source image or video
+source_division: 2 # make sure the height and width of source image or video can be divided by this number
+input_height: 256
+input_width: 256
+source_fps: 25
+min_video_length: 50
+max_video_length: 500

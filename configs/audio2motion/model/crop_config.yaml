@@ -1,0 +1,21 @@
+insightface_root: pretrain_weights/decode/v1/insightface
+landmark_ckpt_path: pretrain_weights/decode/v1/first_stage/landmark.onnx
+xpose_config_file_path: src/utils/UniPose_SwinT.py
+device_id: 0                         # gpu device id
+flag_force_cpu: False                # force cpu inference, WIP
+det_thresh: 0.15                      # detection threshold
+########## source image or video cropping option ##########
+dsize: 512                           # crop size
+scale: 2.3                           # scale factor
+vx_ratio: 0                          # vx ratio
+vy_ratio: -0.125                     # vy ratio +up, -down
+max_face_num: 0                      # max face number, 0 mean no limit
+flag_do_rot: True                    # whether to conduct the rotation when flag_do_crop is True
+animal_face_type: animal_face_9      # animal_face_68 -> 68 landmark points, animal_face_9 -> 9 landmarks
+########## driving video auto cropping option ##########
+scale_crop_driving_video: 2.2        # 2.0 # scale factor for cropping driving video
+vx_ratio_crop_driving_video: 0.0     # adjust x offset
+vy_ratio_crop_driving_video: -0.1  # adjust y offset
+direction: large-small               # direction of cropping
+source_max_dim: 1280
+source_division: 2
