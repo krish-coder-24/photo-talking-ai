@@ -4,13 +4,9 @@
 custom print and log functions 
 """
 
+from rich import print
+
 __all__ = ['rprint', 'rlog']
 
-try:
-    from rich.console import Console
-    console = Console()
-    rprint = console.print
-    rlog = console.log
-except:
-    rprint = print
-    rlog = print
+rprint = print
+rlog = lambda msg: print(f"[cyan]{time.ctime().split()[3]}[/cyan] [green]INFO[/green] - {msg}")
