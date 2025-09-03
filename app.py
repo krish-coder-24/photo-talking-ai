@@ -5,11 +5,14 @@ import gc
 import sys
 import time
 import math
+import shutil
+import hashlib
+import tempfile
+from pathlib import Path
+
 import gradio as gr
 import spaces
 import torch
-import tempfile
-from pathlib import Path
 from huggingface_hub import snapshot_download
 from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError, RevisionNotFoundError
 from pydub import AudioSegment
@@ -29,10 +32,23 @@ WEIGHTS_DIR = "pretrain_weights"
 REPO_ID = "lixinyizju/moda"
 
 # --- Helpers ---
+def cooldown_gpu(duration=7):
+    start, width = time.time(), 20
+    while time.time()-start < duration:
+        t = time.time()-start
+        fill = int((1 + __import__('math').sin(t*3)) * (width/2))
+        bar = "#"*fill + "-"*(width-fill)
+        sys.stdout.write(f"\r[ {bar} ] Cooling GPU... {duration-int(t)}s")
+        sys.stdout.flush()
+        time.sleep(0.1)
+    sys.stdout.write("\rGPU cooldowned ✅            \n")
+    sys.stdout.flush()
+
 def clean_gpu(threshold_gb=2):
     """Force GPU + Python garbage cleanup."""
     if not torch.cuda.is_available():
         print("⚠️ No GPU detected.")
+        gc.collect()
         return
     device = torch.device("cuda")
     props = torch.cuda.get_device_properties(device)
@@ -45,23 +61,10 @@ def clean_gpu(threshold_gb=2):
         print("🧹 Clearing GPU cache...")
         torch.cuda.empty_cache()
         torch.cuda.ipc_collect()
-        cooldown_gpu(8)
+        cooldown_gpu(6)
     else:
         print("✅ GPU has enough free memory, no cleanup needed.")
     gc.collect()
-
-def cooldown_gpu(duration=7):
-    start, width = time.time(), 20
-    while time.time()-start < duration:
-        # sine wave pulse between 0 and width
-        t = time.time()-start
-        fill = int((1 + __import__('math').sin(t*3)) * (width/2))
-        bar = "#"*fill + "-"*(width-fill)
-        sys.stdout.write(f"\r[ {bar} ] Cooling GPU... {duration-int(t)}s")
-        sys.stdout.flush()
-        time.sleep(0.1)
-    sys.stdout.write("\rGPU cooldowned ✅            \n")
-    sys.stdout.flush()
 
 def download_weights():
     """Ensure model weights are available locally."""
@@ -98,23 +101,76 @@ def ensure_wav_format(audio_path):
     except Exception as e:
         raise gr.Error(f"Failed to convert to WAV: {e}")
 
-def process_audio_in_chunks(audio, run_output_dir, source_image_path, emotion_id, cfg_scale):
-    """Split audio into chunks, generate video segments, and return concatenated video path."""
-    window_ms, stride_ms = 500, 500 
+def file_sig(p):
+    """Cheap file signature for hashing without full read."""
+    try:
+        st = os.stat(p)
+        return f"{os.path.basename(p)}:{st.st_size}:{int(st.st_mtime)}"
+    except Exception:
+        return os.path.basename(p)
+
+def make_run_output_dir(source_image_path, audio_path, emotion_id, cfg_scale, user_id="anon"):
+    key = f"{user_id}|{file_sig(source_image_path)}|{file_sig(audio_path)}|{emotion_id}|{cfg_scale}"
+    run_hash = hashlib.md5(key.encode()).hexdigest()[:12]
+    run_dir = os.path.join(OUTPUT_DIR, f"run_{run_hash}")
+    os.makedirs(run_dir, exist_ok=True)
+    return run_dir, run_hash
+
+def process_audio_in_chunks(
+    audio,
+    run_output_dir,
+    source_image_path,
+    emotion_id,
+    cfg_scale,
+    progress=None,
+    status_cb=None
+):
+    """
+    Split audio into chunks, resume missing ones, concatenate, cleanup, return final path.
+    """
+    window_ms, stride_ms = 500, 500
     chunks = [audio[start:start + window_ms] for start in range(0, len(audio), stride_ms)]
-    video_segments, temp_files = [], []
+    video_segments, temp_wavs = [], []
+    total_chunks = len(chunks)
+    start_time = time.time()
+
+    def log(msg, kind="info"):
+        print(msg)
+        if status_cb:
+            status_cb(msg, kind)
 
     try:
-        for idx, chunk in enumerate(chunks):
-            print(f"==== Processing chunk ({idx+1}/{len(chunks)}) ====")
-            tmp_chunk_path = os.path.join(run_output_dir, f"chunk_{idx}.wav")
-            chunk.export(tmp_chunk_path, format="wav", parameters=["-ar", "16000", "-ac", "1"])
-            temp_files.append(tmp_chunk_path)
+        # If final exists already, short-circuit in caller (we still keep this safety)
+        final_path = os.path.join(run_output_dir, "final_video.mp4")
+        if os.path.exists(final_path):
+            log(f"⚡ Cached final exists: {final_path}")
+            return final_path
 
+        for idx, chunk in enumerate(chunks):
+            if progress:
+                progress(((idx) / total_chunks), desc=f"Chunk {idx+1}/{total_chunks}")
+
+            wav_path = os.path.join(run_output_dir, f"chunk_{idx}.wav")
+            mp4_path = os.path.join(run_output_dir, f"chunk_{idx}.mp4")
+
+            # Resume: if mp4 already exists, just load and continue
+            if os.path.exists(mp4_path):
+                log(f"[Resume] Chunk {idx+1}/{total_chunks} already done.")
+                try:
+                    video_segments.append(VideoFileClip(mp4_path))
+                except Exception as e:
+                    raise RuntimeError(f"Failed to open existing video for chunk {idx}: {e}")
+                continue
+
+            log(f"==== Processing chunk ({idx+1}/{total_chunks}) ====")
+            chunk.export(wav_path, format="wav", parameters=["-ar", "16000", "-ac", "1"])
+            temp_wavs.append(wav_path)
+
+            chunk_start = time.time()
             try:
                 out_path = pipeline.driven_sample(
                     image_path=source_image_path,
-                    audio_path=tmp_chunk_path,
+                    audio_path=wav_path,
                     cfg_scale=float(cfg_scale),
                     emo=emotion_id,
                     save_dir=run_output_dir,
@@ -123,45 +179,75 @@ def process_audio_in_chunks(audio, run_output_dir, source_image_path, emotion_id
                 )
                 clean_gpu()
 
-                # ✅ Ensure pipeline returned a file
                 if not out_path or not os.path.exists(out_path):
                     raise FileNotFoundError(f"Pipeline failed to produce video for chunk {idx}")
+
+                # Normalize name for resume determinism
+                if out_path != mp4_path:
+                    try:
+                        shutil.move(out_path, mp4_path)
+                    except Exception:
+                        # If move fails for any reason but the file exists, keep original path
+                        mp4_path = out_path
 
             except RuntimeError as e:
                 clean_gpu()
                 raise gr.Error(
-                    f"GPU OOM on chunk {idx}. "
-                    f"Try shorter audio or lower settings.\nError: {e}"
+                    f"GPU OOM on chunk {idx}. Try shorter audio or lower settings.\nError: {e}"
                 )
 
             # Load clip safely
             try:
-                clip = VideoFileClip(out_path)
+                clip = VideoFileClip(mp4_path)
             except Exception as e:
                 clean_gpu()
                 raise RuntimeError(f"Failed to open video for chunk {idx}: {e}")
 
             video_segments.append(clip)
+
+            # ETA
+            elapsed = time.time() - start_time
+            avg_per_chunk = elapsed / (idx + 1)
+            remaining = max(0.0, avg_per_chunk * (total_chunks - idx - 1))
+            log(f"Chunk {idx+1} done in {time.time()-chunk_start:.2f}s | ETA ~{remaining:.1f}s left")
+
             clean_gpu()
 
-        # ✅ Final concatenation
         if not video_segments:
             raise RuntimeError("No video segments were generated — pipeline produced nothing.")
+
+        if progress:
+            progress(0.98, desc="Concatenating video")
 
         final_clip = concatenate_videoclips(video_segments, method="compose")
         final_path = os.path.join(run_output_dir, "final_video.mp4")
         final_clip.write_videofile(final_path, codec="libx264", audio_codec="aac")
+
+        # Cleanup intermediates (keep only final)
+        for f in os.listdir(run_output_dir):
+            if f.startswith("chunk_"):
+                try:
+                    os.remove(os.path.join(run_output_dir, f))
+                except Exception:
+                    pass
+
+        log(f"✅ Final ready: {final_path}")
         return final_path
 
     finally:
-        # Cleanup temp files + GPU + video handles
-        for f in temp_files:
-            if os.path.exists(f):
-                os.remove(f)
+        for w in temp_wavs:
+            try:
+                if os.path.exists(w):
+                    os.remove(w)
+            except Exception:
+                pass
         for clip in video_segments:
-            clip.close()
+            try:
+                clip.close()
+            except Exception:
+                pass
         clean_gpu()
-        
+
 # --- Init ---
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 download_weights()
@@ -179,7 +265,16 @@ emo_name_to_id = {v: k for k, v in emo_map.items()}
 
 # --- Core ---
 @spaces.GPU(duration=120)
-def generate_motion(source_image_path, driving_audio_path, emotion_name, cfg_scale, progress=gr.Progress(track_tqdm=True)):
+def generate_motion(
+    source_image_path,
+    driving_audio_path,
+    emotion_name,
+    cfg_scale,
+    existing_run_behavior,    # new radio control
+    user_tag,                 # optional tag to include in hash
+    progress=gr.Progress(track_tqdm=True),
+    request: gr.Request = None,
+):
     if pipeline is None:
         raise gr.Error("Pipeline failed to initialize.")
     if not source_image_path:
@@ -187,36 +282,107 @@ def generate_motion(source_image_path, driving_audio_path, emotion_name, cfg_sca
     if not driving_audio_path:
         raise gr.Error("Upload a driving audio.")
 
+    logs = []
+    def status_cb(msg, kind="info"):
+        logs.append(msg)
+
+    def info(msg):
+        print(msg); gr.Info(msg); logs.append(msg)
+
+    def warn(msg):
+        print(msg); gr.Warning(msg); logs.append(f"⚠️ {msg}")
+
     start_time = time.time()
     wav_audio_path = ensure_wav_format(driving_audio_path)
     temp_wav_created = wav_audio_path != driving_audio_path
 
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
-    run_output_dir = os.path.join(OUTPUT_DIR, timestamp)
-    os.makedirs(run_output_dir, exist_ok=True)
+    # user_id from request IP + user_tag
+    ip = "anon"
+    try:
+        ip = getattr(request.client, "host", None) or request.headers.get("x-forwarded-for", "anon")
+    except Exception:
+        pass
+    user_id = (user_tag.strip() or "user") + f"@{ip}"
 
     emotion_id = emo_name_to_id.get(emotion_name, 8)
-    audio = AudioSegment.from_wav(wav_audio_path)
+    run_output_dir, run_hash = make_run_output_dir(source_image_path, wav_audio_path, emotion_id, cfg_scale, user_id=user_id)
+    final_path = os.path.join(run_output_dir, "final_video.mp4")
 
+    exists_final = os.path.exists(final_path)
+    exists_chunks = False
     try:
-        final_path = process_audio_in_chunks(audio, run_output_dir, source_image_path, emotion_id, cfg_scale)
+        exists_chunks = any(f.startswith("chunk_") and f.endswith(".mp4") for f in os.listdir(run_output_dir))
+    except Exception:
+        exists_chunks = False
+
+    # Decision based on radio
+    info(f"Run ID: {run_hash}")
+    if exists_final or exists_chunks:
+        warn(f"Existing data found in {run_output_dir} — behavior: {existing_run_behavior}")
+
+    if existing_run_behavior == "Use Cached Final" and exists_final:
+        info(f"Using cached final: {final_path}")
+        if temp_wav_created and os.path.exists(wav_audio_path):
+            os.remove(wav_audio_path)
+        return final_path, "\n".join(logs)
+
+    if existing_run_behavior == "Regenerate Fresh":
+        # wipe directory
+        for f in os.listdir(run_output_dir):
+            try:
+                os.remove(os.path.join(run_output_dir, f))
+            except Exception:
+                pass
+        info("Cleared previous files. Starting fresh.")
+
+    elif existing_run_behavior == "Resume":
+        if exists_final:
+            info(f"Final already exists; returning cached final: {final_path}")
+            if temp_wav_created and os.path.exists(wav_audio_path):
+                os.remove(wav_audio_path)
+            return final_path, "\n".join(logs)
+        else:
+            info("Resuming from existing chunks (if any).")
+
+    else:  # Auto
+        if exists_final:
+            info(f"Auto: returning cached final: {final_path}")
+            if temp_wav_created and os.path.exists(wav_audio_path):
+                os.remove(wav_audio_path)
+            return final_path, "\n".join(logs)
+        elif exists_chunks:
+            info("Auto: partial chunks found → resuming.")
+        else:
+            info("Auto: no cache found → fresh generation.")
+
+    # Process
+    audio = AudioSegment.from_wav(wav_audio_path)
+    try:
+        result_path = process_audio_in_chunks(
+            audio,
+            run_output_dir,
+            source_image_path,
+            emotion_id,
+            cfg_scale,
+            progress=progress,
+            status_cb=status_cb
+        )
     finally:
         if temp_wav_created and os.path.exists(wav_audio_path):
             os.remove(wav_audio_path)
         clean_gpu()
 
-    print(f"Done in {time.time()-start_time:.2f}s → {final_path}")
-    return final_path
+    gr.Info(f"Done in {time.time()-start_time:.2f}s → {result_path}")
+    logs.append(f"Done in {time.time()-start_time:.2f}s → {result_path}")
+    return result_path, "\n".join(logs)
 
 # --- UI ---
 with gr.Blocks(theme=gr.themes.Soft(), css=".gradio-container {max-width:960px;margin:0 auto}") as demo:
     gr.HTML(
         """
         <div align='center'>
-            <h1>Project: Photo talking AI</h1>
-            <p>
-                <a href='https://github.com/krish-coder-24/photo-talking-ai/'><img src='https://img.shields.io/badge/Code-Github-green'></a>
-            </p>
+            <br>
+            <h1>Project: Photo talking AI</h1>&nbsp;&nbsp;<a href='https://github.com/krish-coder-24/photo-talking-ai/'><img src='https://img.shields.io/badge/Code-Github-green'></a>
         </div>
         """
     )
@@ -227,13 +393,28 @@ with gr.Blocks(theme=gr.themes.Soft(), css=".gradio-container {max-width:960px;m
             driving_audio = gr.Audio(label="Driving Audio", type="filepath", value="src/examples/driving_audios/5.wav")
             emotion_dropdown = gr.Dropdown(label="Emotion", choices=list(emo_map.values()), value="None")
             cfg_slider = gr.Slider(label="CFG Scale", minimum=1.0, maximum=3.0, step=0.05, value=1.2)
+
+            existing_run_behavior = gr.Radio(
+                label="If existing run detected",
+                choices=["Auto", "Resume", "Regenerate Fresh", "Use Cached Final"],
+                value="Auto",
+                interactive=True
+            )
+            user_tag = gr.Textbox(label="User Tag (optional)", placeholder="username / session / custom tag")
+
             submit_button = gr.Button("Generate Video", variant="primary")
+
         with gr.Column(scale=1):
             output_video = gr.Video(label="Generated Video")
+            status_md = gr.Markdown(label="Status / Logs")
 
     gr.Markdown("---\n### Disclaimer\nAcademic use only. Users are liable for generated content.")
 
-    submit_button.click(fn=generate_motion, inputs=[source_image, driving_audio, emotion_dropdown, cfg_slider], outputs=output_video)
+    submit_button.click(
+        fn=generate_motion,
+        inputs=[source_image, driving_audio, emotion_dropdown, cfg_slider, existing_run_behavior, user_tag],
+        outputs=[output_video, status_md]
+    )
 
 if __name__ == "__main__":
     demo.launch(share=True)
