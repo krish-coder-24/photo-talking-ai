@@ -413,7 +413,7 @@ with gr.Blocks(theme=gr.themes.Soft(), css=".gradio-container {max-width:960px;m
     submit_button.click(
         fn=generate_motion,
         inputs=[source_image, driving_audio, emotion_dropdown, cfg_slider, existing_run_behavior, user_tag],
-        outputs=[output_video, status_md]
+        outputs=[output_video]
     )
 
 if __name__ == "__main__":
