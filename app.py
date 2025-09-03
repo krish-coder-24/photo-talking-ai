@@ -100,7 +100,7 @@ def ensure_wav_format(audio_path):
 
 def process_audio_in_chunks(audio, run_output_dir, source_image_path, emotion_id, cfg_scale):
     """Split audio into chunks, generate video segments, and return concatenated video path."""
-    window_ms, stride_ms = 650, 500 
+    window_ms, stride_ms = 500, 500 
     chunks = [audio[start:start + window_ms] for start in range(0, len(audio), stride_ms)]
     video_segments, temp_files = [], []
 
