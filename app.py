@@ -397,7 +397,7 @@ def generate_motion(
             info(f"Auto: returning cached final: {final_path}")
             if temp_wav_created and os.path.exists(wav_audio_path):
                 os.remove(wav_audio_path)
-            return final_path, "\n".join(logs)
+            return final_path
         elif exists_chunks:
             info("Auto: partial chunks found → resuming.")
         else:
@@ -424,7 +424,7 @@ def generate_motion(
     gr.Info(f"Done in {time.time()-start_time:.2f}s → {result_path}")
     logs.append(f"Done in {time.time()-start_time:.2f}s → {result_path}")
     log_path = save_logs(run_output_dir, logs)
-    console.log(f"Log file saved at -> {log_path}")
+    console.print(f"Log file saved at -> {log_path}")
     return result_path
 
 # --- Wrapper with ETA logging ---
