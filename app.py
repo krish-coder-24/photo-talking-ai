@@ -146,12 +146,9 @@ def process_audio_in_chunks(
             log(f"⚡ Cached final exists: {final_path}")
             return final_path
 
-        for idx, chunk in enumerate(chunks):
+        for idx, chunk in progress.tqdm(enumerate(chunks), total=total_chunks, desc="Generating Video"):
             if progress:
-                pct = int((idx / total_chunks) * 100)
                 progress(((idx) / total_chunks), desc=f"Chunk {idx+1}/{total_chunks}")
-                if status_cb:
-                    status_cb(f"<progress value='{pct}' max='100' style='width:100%'></progress>")
 
             wav_path = os.path.join(run_output_dir, f"chunk_{idx}.wav")
             mp4_path = os.path.join(run_output_dir, f"chunk_{idx}.mp4")
@@ -377,8 +374,7 @@ def generate_motion(
 
     gr.Info(f"Done in {time.time()-start_time:.2f}s → {result_path}")
     logs.append(f"Done in {time.time()-start_time:.2f}s → {result_path}")
-    progress_html = "<progress value='100' max='100' style='width:100%'></progress>"
-    return result_path, progress_html, logs[-1]
+    return result_path, logs[-1]
 
 # --- UI ---
 with gr.Blocks(theme=gr.themes.Soft(), css=".gradio-container {max-width:960px;margin:0 auto}") as demo:
@@ -410,15 +406,14 @@ with gr.Blocks(theme=gr.themes.Soft(), css=".gradio-container {max-width:960px;m
 
         with gr.Column(scale=1):
             output_video = gr.Video(label="Generated Video")
-            progress_bar = gr.HTML(value="<progress value='0' max='100' style='width:100%'></progress>", label="Progress")
-            logs_box = gr.Textbox(label="Logs", interactive=False)
+            logs_box = gr.Markdown(label="Status / Logs")
 
     gr.Markdown("---\n### Disclaimer\nAcademic use only. Users are liable for generated content.")
 
     submit_button.click(
         fn=generate_motion,
         inputs=[source_image, driving_audio, emotion_dropdown, cfg_slider, existing_run_behavior, user_tag],
-        outputs=[output_video, progress_bar, logs_box]
+        outputs=[output_video, logs_box]
     )
 
 
