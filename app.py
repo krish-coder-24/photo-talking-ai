@@ -190,6 +190,8 @@ def process_audio_in_chunks(
                         # If move fails for any reason but the file exists, keep original path
                         mp4_path = out_path
 
+                clear_output() if (idx % 10) == 0 else print()
+            
             except RuntimeError as e:
                 clean_gpu()
                 raise gr.Error(
