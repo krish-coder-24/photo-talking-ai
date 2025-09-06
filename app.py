@@ -155,6 +155,7 @@ def process_audio_in_chunks(
     window_ms, stride_ms = 505, 500
     chunks = [audio[start:start + window_ms] for start in range(0, len(audio), stride_ms)]
     video_segments, temp_wavs = [], []
+    stitched_audio = AudioSegment.silent(duration=0)  # NEW
     total_chunks = len(chunks)
     start_time = time.time()
 
@@ -184,11 +185,16 @@ def process_audio_in_chunks(
                     video_segments.append(VideoFileClip(mp4_path))
                 except Exception as e:
                     raise RuntimeError(f"Failed to open existing video for chunk {idx}: {e}")
+                # also re-append audio for stitched result
+                stitched_audio += AudioSegment.from_wav(wav_path)  # NEW
                 continue
 
             log(f"==== Processing chunk ({idx+1}/{total_chunks}) ====")
             chunk.export(wav_path, format="wav", parameters=["-ar", "16000", "-ac", "1"])
             temp_wavs.append(wav_path)
+
+            # add to stitched audio with micro crossfade to avoid clicks
+            stitched_audio = stitched_audio.append(AudioSegment.from_wav(wav_path), crossfade=20)  # NEW
 
             chunk_start = time.time()
             try:
@@ -244,7 +250,17 @@ def process_audio_in_chunks(
         if progress:
             progress(0.95, desc="Preparing final video")
 
+        # Concatenate silent video
         final_clip = concatenate_videoclips(video_segments, method="compose")
+
+        # Export stitched audio once
+        stitched_audio_path = os.path.join(run_output_dir, "stitched.wav")
+        stitched_audio.export(stitched_audio_path, format="wav")
+
+        # Attach continuous audio
+        audio_clip = AudioFileClip(stitched_audio_path)
+        final_clip = final_clip.set_audio(audio_clip)
+
         final_path = os.path.join(run_output_dir, "final_video.mp4")
         gr_progress_bar = GradioLogger(gr.Progress(track_tqdm=True), final_clip.duration)
         
