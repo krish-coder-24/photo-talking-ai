@@ -258,6 +258,17 @@ class LiveVASAPipeline(object):
         pass
 
 
+class GradioMoviePyProgress:
+    def __init__(self, gr_progress, total_duration):
+        self.gr_progress = gr_progress
+        self.total = total_duration
+
+    def callback(self, **kwargs):
+        t = kwargs.get("t", 0)
+        pct = min(t / self.total, 1.0)
+        self.gr_progress(pct)
+
+
 if __name__ == "__main__":
     import time
     import random
