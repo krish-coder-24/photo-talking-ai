@@ -376,45 +376,116 @@ def generate_motion(
     logs.append(f"Done in {time.time()-start_time:.2f}s → {result_path}")
     return result_path, logs[-1]
 
+# --- Wrapper with ETA logging ---
+def run_and_log(source_image_path, driving_audio_path, emotion_name, cfg_scale, existing_run_behavior, user_tag):
+    if not driving_audio_path:
+        return None, "⚠️ No audio provided!"
+
+    audio = AudioSegment.from_wav(driving_audio_path)
+    n_chunks = math.ceil(len(audio) / 500)
+    eta_sec = n_chunks * 1.2  # heuristic
+
+    start_time = time.time()
+    final_path = generate_motion(
+        source_image_path,
+        driving_audio_path,
+        emotion_name,
+        cfg_scale,
+        existing_run_behavior,
+        user_tag
+    )
+    end_time = time.time()
+
+    elapsed = end_time - start_time
+    msg = (
+        f"🎯 Estimated time: ~{eta_sec:.1f}s\n"
+        f"⏱️ Actual time: {elapsed:.1f}s\n"
+        f"✅ Generation completed successfully!"
+    )
+    return final_path, msg
+
+
 # --- UI ---
 with gr.Blocks(theme=gr.themes.Soft(), css=".gradio-container {max-width:960px;margin:0 auto}") as demo:
     gr.HTML(
         """
         <div align='center'>
             <br>
-            <h1>Project: Photo talking AI</h1>&nbsp;&nbsp;<a href='https://github.com/krish-coder-24/photo-talking-ai/'><img src='https://img.shields.io/badge/Code-Github-green'></a>
+            <h1>🎥 Project: Photo Talking AI</h1>
+            <p><a href='https://github.com/krish-coder-24/photo-talking-ai/' target='_blank'>
+            <img src='https://img.shields.io/badge/Code-Github-green'></a></p>
         </div>
         """
     )
 
-    with gr.Row(variant="panel"):
-        with gr.Column(scale=1):
-            source_image = gr.Image(label="Source Image", type="filepath", value="src/examples/reference_images/7.jpg")
-            driving_audio = gr.Audio(label="Driving Audio", type="filepath", value="src/examples/driving_audios/5.wav")
-            emotion_dropdown = gr.Dropdown(label="Emotion", choices=list(emo_map.values()), value="None")
-            cfg_slider = gr.Slider(label="CFG Scale", minimum=1.0, maximum=3.0, step=0.05, value=1.2)
+    with gr.Tabs():
+        with gr.Tab("🚀 Generate Video"):
+            with gr.Row():
+                with gr.Column(scale=1, min_width=350):
+                    gr.Markdown("### 📥 Input Settings")
+                    source_image = gr.Image(label="Source Image", type="filepath", value="src/examples/reference_images/7.jpg")
+                    driving_audio = gr.Audio(label="Driving Audio", type="filepath", value="src/examples/driving_audios/5.wav")
 
-            existing_run_behavior = gr.Radio(
-                label="If existing run detected",
-                choices=["Auto", "Resume", "Regenerate Fresh", "Use Cached Final"],
-                value="Auto",
-                interactive=True
+                    with gr.Accordion("⚙️ Advanced Options", open=False):
+                        emotion_dropdown = gr.Dropdown(
+                            label="Emotion",
+                            choices=list(emo_map.values()),
+                            value="None"
+                        )
+                        cfg_slider = gr.Slider(
+                            label="CFG Scale",
+                            minimum=1.0, maximum=3.0,
+                            step=0.05, value=1.2
+                        )
+                        existing_run_behavior = gr.Radio(
+                            label="If existing run detected",
+                            choices=["Auto", "Resume", "Regenerate Fresh", "Use Cached Final"],
+                            value="Auto",
+                            interactive=True
+                        )
+                        user_tag = gr.Textbox(
+                            label="User Tag (optional)",
+                            placeholder="username / session / custom tag"
+                        )
+
+                    submit_button = gr.Button("🎬 Generate Video", variant="primary")
+
+                with gr.Column(scale=1, min_width=450):
+                    gr.Markdown("### 📺 Output")
+                    output_video = gr.Video(label="Generated Video")
+
+            # hidden initially
+            status_box = gr.Textbox(
+                label="Status / Logs",
+                interactive=False,
+                visible=False
             )
-            user_tag = gr.Textbox(label="User Tag (optional)", placeholder="username / session / custom tag")
 
-            submit_button = gr.Button("Generate Video", variant="primary")
+        with gr.Tab("ℹ️ About"):
+            gr.Markdown(
+                """
+                ### 📌 About this Project  
+                This is an academic demo for generating **talking photos** using AI.  
+                - Upload a **source image**  
+                - Provide a **driving audio**  
+                - (Optional) Adjust emotion / CFG scale  
 
-        with gr.Column(scale=1):
-            output_video = gr.Video(label="Generated Video")
-            logs_box = gr.Markdown(label="Status / Logs")
+                ⚠️ **Disclaimer:**  
+                Academic use only. You are liable for any generated content.  
+                """
+            )
 
-    gr.Markdown("---\n### Disclaimer\nAcademic use only. Users are liable for generated content.")
-
+    # Hook up with ETA-aware wrapper
     submit_button.click(
-        fn=generate_motion,
+        fn=run_and_log,
         inputs=[source_image, driving_audio, emotion_dropdown, cfg_slider, existing_run_behavior, user_tag],
-        outputs=[output_video, logs_box]
+        outputs=[output_video, status_box]
+    ).then(
+        lambda: gr.update(visible=True),
+        None,
+        status_box
     )
+
 
 
 if __name__ == "__main__":
