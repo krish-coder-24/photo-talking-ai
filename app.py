@@ -436,7 +436,7 @@ def run_and_log(source_image_path, driving_audio_path, emotion_name, cfg_scale, 
         # crude ETA guess
         audio = AudioSegment.from_wav(driving_audio_path)
         n_chunks = math.ceil(len(audio) / 500)
-        eta_sec = n_chunks * 1.2  # heuristic
+        eta_sec = n_chunks * 13.3  # heuristic
     except Exception as e:
         console.print_exception()  # pretty traceback to server logs
         return None, "❌ Failed to read audio file. Please upload a valid audio."
