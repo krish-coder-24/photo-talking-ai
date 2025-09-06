@@ -406,7 +406,6 @@ with gr.Blocks(theme=gr.themes.Soft(), css=".gradio-container {max-width:960px;m
 
         with gr.Column(scale=1):
             output_video = gr.Video(label="Generated Video")
-            status_md = gr.Markdown(label="Status / Logs")
 
     gr.Markdown("---\n### Disclaimer\nAcademic use only. Users are liable for generated content.")
 
