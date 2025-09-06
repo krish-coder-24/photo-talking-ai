@@ -68,7 +68,6 @@ def clean_gpu(threshold_gb=2):
         print("🧹 Clearing GPU cache...")
         torch.cuda.empty_cache()
         torch.cuda.ipc_collect()
-        cooldown_gpu(0)
     else:
         print("✅ GPU has enough free memory, no cleanup needed.")
     gc.collect()
@@ -108,11 +107,22 @@ def ensure_wav_format(audio_path):
     except Exception as e:
         raise gr.Error(f"Failed to convert to WAV: {e}")
 
-def file_sig(p):
-    """Cheap file signature for hashing without full read."""
+def file_sig(p, chunk_size=1024*1024):
+    """Reliable, memory-safe full-file hash for any file size."""
+    if not os.path.exists(p):
+        return os.path.basename(p)
+    
     try:
         st = os.stat(p)
-        return f"{os.path.basename(p)}:{st.st_size}:{int(st.st_mtime)}"
+        md5 = hashlib.md5()
+        with open(p, "rb") as f:
+            while True:
+                chunk = f.read(chunk_size)
+                if not chunk:
+                    break
+                md5.update(chunk)
+        content_hash = md5.hexdigest()
+        return f"{os.path.basename(p)}:{st.st_size}:{content_hash}"
     except Exception:
         return os.path.basename(p)
 
@@ -141,7 +151,7 @@ def process_audio_in_chunks(
     """
     Split audio into chunks, resume missing ones, concatenate, cleanup, return final path.
     """
-    window_ms, stride_ms = 750, 750
+    window_ms, stride_ms = 300, 400
     chunks = [audio[start:start + window_ms] for start in range(0, len(audio), stride_ms)]
     video_segments, temp_wavs = [], []
     total_chunks = len(chunks)
@@ -386,6 +396,7 @@ def generate_motion(
         if temp_wav_created and os.path.exists(wav_audio_path):
             os.remove(wav_audio_path)
         clean_gpu()
+        cooldown_gpu()
 
     gr.Info(f"Done in {time.time()-start_time:.2f}s → {result_path}")
     logs.append(f"Done in {time.time()-start_time:.2f}s → {result_path}")
