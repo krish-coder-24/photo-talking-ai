@@ -277,7 +277,7 @@ def process_audio_in_chunks(
 
         # Cleanup intermediates (keep only final)
         for f in os.listdir(run_output_dir):
-            if f.startswith("chunk_") or f.startswith("tmp_"):
+            if f.startswith("chunk_"):
                 try:
                     os.remove(os.path.join(run_output_dir, f))
                 except Exception:
