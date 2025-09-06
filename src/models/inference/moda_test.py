@@ -258,15 +258,16 @@ class LiveVASAPipeline(object):
         pass
 
 
-class GradioMoviePyProgress:
-    def __init__(self, gr_progress, total_duration):
-        self.gr_progress = gr_progress
-        self.total = total_duration
-    
-    def callback(self, **kwargs):
-        t = kwargs.get("t", 0)
-        pct = min(t / self.total, 1.0)
-        self.gr_progress(pct)
+class GradioLogger(ProgressBarLogger):
+    def __init__(self, progress, total):
+        super().__init__()
+        self.progress = progress
+        self.total = total
+
+    def bars_callback(self, bar, attr, value, old_value=None):
+        if attr == "index" and self.total > 0:
+            frac = value / self.bars[bar]["total"]
+            self.progress(frac, desc=f"Rendering video {int(frac*100)}%")
 
 
 if __name__ == "__main__":
