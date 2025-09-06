@@ -151,7 +151,7 @@ def process_audio_in_chunks(
     """
     Split audio into chunks, resume missing ones, concatenate, cleanup, return final path.
     """
-    window_ms, stride_ms = 300, 400
+    window_ms, stride_ms = 500, 500
     chunks = [audio[start:start + window_ms] for start in range(0, len(audio), stride_ms)]
     video_segments, temp_wavs = [], []
     total_chunks = len(chunks)
