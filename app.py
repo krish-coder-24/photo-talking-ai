@@ -17,6 +17,10 @@ from huggingface_hub import snapshot_download
 from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError, RevisionNotFoundError
 from pydub import AudioSegment
 from moviepy.editor import VideoFileClip, concatenate_videoclips
+from IPython.display import clear_output
+
+from rich.console import Console
+from rich.traceback import install as rich_traceback
 
 # Add the src directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
@@ -30,6 +34,9 @@ DEFAULT_SILENT_AUDIO_PATH = "src/examples/silent-audio.wav"
 OUTPUT_DIR = "gradio_output"
 WEIGHTS_DIR = "pretrain_weights"
 REPO_ID = "lixinyizju/moda"
+
+console = Console()
+rich_traceback(show_locals=False)
 
 # --- Helpers ---
 def cooldown_gpu(duration=7):
@@ -383,29 +390,39 @@ def run_and_log(source_image_path, driving_audio_path, emotion_name, cfg_scale, 
     if not driving_audio_path:
         return None, "⚠️ No audio provided!"
 
-    audio = AudioSegment.from_wav(driving_audio_path)
-    n_chunks = math.ceil(len(audio) / 500)
-    eta_sec = n_chunks * 1.2  # heuristic
+    try:
+        # crude ETA guess
+        audio = AudioSegment.from_wav(driving_audio_path)
+        n_chunks = math.ceil(len(audio) / 500)
+        eta_sec = n_chunks * 1.2  # heuristic
+    except Exception as e:
+        console.print_exception()  # pretty traceback to server logs
+        return None, "❌ Failed to read audio file. Please upload a valid audio."
 
     start_time = time.time()
-    final_path = generate_motion(
-        source_image_path,
-        driving_audio_path,
-        emotion_name,
-        cfg_scale,
-        existing_run_behavior,
-        user_tag
-    )
-    end_time = time.time()
+    try:
+        final_path = generate_motion(
+            source_image_path,
+            driving_audio_path,
+            emotion_name,
+            cfg_scale,
+            existing_run_behavior,
+            user_tag
+        )
+    except RuntimeError as e:
+        console.print_exception()
+        return None, "❌ GPU ran out of memory. Try shorter audio or lower CFG scale."
+    except Exception as e:
+        console.print_exception()
+        return None, f"❌ Generation failed: {str(e)}"
 
-    elapsed = end_time - start_time
+    elapsed = time.time() - start_time
     msg = (
         f"🎯 Estimated time: ~{eta_sec:.1f}s\n"
         f"⏱️ Actual time: {elapsed:.1f}s\n"
         f"✅ Generation completed successfully!"
     )
     return final_path, msg
-
 
 # --- UI ---
 with gr.Blocks(theme=gr.themes.Soft(), css=".gradio-container {max-width:960px;margin:0 auto}") as demo:
@@ -487,7 +504,6 @@ with gr.Blocks(theme=gr.themes.Soft(), css=".gradio-container {max-width:960px;m
         None,
         status_box
     )
-
 
 
 if __name__ == "__main__":
