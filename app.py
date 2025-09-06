@@ -68,6 +68,7 @@ def clean_gpu(threshold_gb=2):
         print("🧹 Clearing GPU cache...")
         torch.cuda.empty_cache()
         torch.cuda.ipc_collect()
+        cooldown_gpu(5)
     else:
         print("✅ GPU has enough free memory, no cleanup needed.")
     gc.collect()
@@ -201,6 +202,7 @@ def process_audio_in_chunks(
                     silent_audio_path=DEFAULT_SILENT_AUDIO_PATH,
                 )
                 clean_gpu()
+                clear_output() if (idx+1 % 10) == 0 else print()
 
                 if not out_path or not os.path.exists(out_path):
                     raise FileNotFoundError(f"Pipeline failed to produce video for chunk {idx}")
@@ -212,8 +214,6 @@ def process_audio_in_chunks(
                     except Exception:
                         # If move fails for any reason but the file exists, keep original path
                         mp4_path = out_path
-
-                clear_output() if (idx % 10) == 0 else print()
             
             except RuntimeError as e:
                 clean_gpu()
@@ -242,11 +242,20 @@ def process_audio_in_chunks(
             raise RuntimeError("No video segments were generated — pipeline produced nothing.")
 
         if progress:
-            progress(0.98, desc="Concatenating video")
+            progress(0.95, desc="Preparing final video")
+            gr_progress_bar = GradioMoviePyProgress(progress, final_clip.duration)
+        else:
+            gr_progress_bar = None
 
         final_clip = concatenate_videoclips(video_segments, method="compose")
         final_path = os.path.join(run_output_dir, "final_video.mp4")
-        final_clip.write_videofile(final_path, codec="libx264", audio_codec="aac")
+        final_clip.write_videofile(
+            final_path,
+            codec="libx264",
+            audio_codec="aac",
+            progress_bar=gr_progress_bar,
+            logger=None
+        )
 
         # Cleanup intermediates (keep only final)
         for f in os.listdir(run_output_dir):
