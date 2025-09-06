@@ -264,12 +264,9 @@ class GradioMoviePyProgress:
         self.total = total_duration
 
     def callback(self, **kwargs):
-        t = kwargs.get("t", 0)
-        if self.total > 0:
-            self.gr_progress(t / self.total)
-
-    def message(self, s):
-        print(s)
+        t = kwargs.get("t", 0)  # seconds processed
+        pct = min(t / self.total, 1.0)
+        self.gr_progress(pct)
 
 
 if __name__ == "__main__":
