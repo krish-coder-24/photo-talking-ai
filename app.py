@@ -24,7 +24,7 @@ from rich.traceback import install as rich_traceback
 
 # Add the src directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
-from models.inference.moda_test import LiveVASAPipeline, GradioMoviePyProgress, emo_map, set_seed
+from models.inference.moda_test import LiveVASAPipeline, GradioLogger, emo_map, set_seed
 
 # --- Config ---
 set_seed(42)
