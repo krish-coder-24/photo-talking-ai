@@ -251,8 +251,7 @@ def process_audio_in_chunks(
             final_path,
             codec="libx264",
             audio_codec="aac",
-            progress_bar=gr_progress_bar,
-            logger=None
+            logger=gr_progress_bar
         )
 
         # Cleanup intermediates (keep only final)
