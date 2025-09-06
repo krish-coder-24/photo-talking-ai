@@ -246,13 +246,13 @@ def process_audio_in_chunks(
 
         final_clip = concatenate_videoclips(video_segments, method="compose")
         final_path = os.path.join(run_output_dir, "final_video.mp4")
-        gr_progress_bar = GradioMoviePyProgress(progress, final_clip.duration)
+        gr_progress_bar = GradioLogger(gr.Progress(track_tqdm=True), final_clip.duration)
+        
         final_clip.write_videofile(
             final_path,
             codec="libx264",
             audio_codec="aac",
-            progress_bar=gr_progress_bar,
-            logger=None
+            logger=gr_progress_bar
         )
 
         # Cleanup intermediates (keep only final)
