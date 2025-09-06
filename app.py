@@ -194,7 +194,11 @@ def process_audio_in_chunks(
             temp_wavs.append(wav_path)
 
             # add to stitched audio with micro crossfade to avoid clicks
-            stitched_audio = stitched_audio.append(AudioSegment.from_wav(wav_path), crossfade=20)  # NEW
+            chunk_audio = AudioSegment.from_wav(wav_path)
+            if len(stitched_audio) == 0:
+                stitched_audio = chunk_audio
+            else:
+                stitched_audio = stitched_audio.append(chunk_audio, crossfade=20)
 
             chunk_start = time.time()
             try:
