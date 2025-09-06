@@ -16,7 +16,7 @@ import torch
 from huggingface_hub import snapshot_download
 from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError, RevisionNotFoundError
 from pydub import AudioSegment
-from moviepy.editor import VideoFileClip, concatenate_videoclips
+from moviepy.editor import VideoFileClip, concatenate_videoclips, AudioFileClip
 from IPython.display import clear_output
 
 from rich.console import Console
