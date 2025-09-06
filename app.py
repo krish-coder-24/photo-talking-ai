@@ -68,7 +68,7 @@ def clean_gpu(threshold_gb=2):
         print("🧹 Clearing GPU cache...")
         torch.cuda.empty_cache()
         torch.cuda.ipc_collect()
-        cooldown_gpu(6)
+        cooldown_gpu(0)
     else:
         print("✅ GPU has enough free memory, no cleanup needed.")
     gc.collect()
@@ -122,6 +122,12 @@ def make_run_output_dir(source_image_path, audio_path, emotion_id, cfg_scale, us
     run_dir = os.path.join(OUTPUT_DIR, f"run_{run_hash}")
     os.makedirs(run_dir, exist_ok=True)
     return run_dir, run_hash
+
+def save_logs(run_dir, logs, filename="logs.txt"):
+    path = os.path.join(run_dir, filename)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(map(str, logs)) if isinstance(logs, (list, tuple)) else str(logs))
+    return path
 
 def process_audio_in_chunks(
     audio,
@@ -383,7 +389,9 @@ def generate_motion(
 
     gr.Info(f"Done in {time.time()-start_time:.2f}s → {result_path}")
     logs.append(f"Done in {time.time()-start_time:.2f}s → {result_path}")
-    return result_path, logs[-1]
+    log_path = save_logs(run_output_dir, logs)
+    console.log(f"Log file saved at -> {log_path}")
+    return result_path
 
 # --- Wrapper with ETA logging ---
 def run_and_log(source_image_path, driving_audio_path, emotion_name, cfg_scale, existing_run_behavior, user_tag):
@@ -412,6 +420,8 @@ def run_and_log(source_image_path, driving_audio_path, emotion_name, cfg_scale, 
     except RuntimeError as e:
         console.print_exception()
         return None, "❌ GPU ran out of memory. Try shorter audio or lower CFG scale."
+    except KeyboardInterrupt:
+        exit(0)
     except Exception as e:
         console.print_exception()
         return None, f"❌ Generation failed: {str(e)}"
