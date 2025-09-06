@@ -148,7 +148,10 @@ def process_audio_in_chunks(
 
         for idx, chunk in enumerate(chunks):
             if progress:
+                pct = int((idx / total_chunks) * 100)
                 progress(((idx) / total_chunks), desc=f"Chunk {idx+1}/{total_chunks}")
+                if status_cb:
+                    status_cb(f"<progress value='{pct}' max='100' style='width:100%'></progress>")
 
             wav_path = os.path.join(run_output_dir, f"chunk_{idx}.wav")
             mp4_path = os.path.join(run_output_dir, f"chunk_{idx}.mp4")
@@ -225,7 +228,7 @@ def process_audio_in_chunks(
 
         # Cleanup intermediates (keep only final)
         for f in os.listdir(run_output_dir):
-            if f.startswith("chunk_"):
+            if f.startswith("chunk_") or f.startswith("tmp_"):
                 try:
                     os.remove(os.path.join(run_output_dir, f))
                 except Exception:
@@ -270,8 +273,8 @@ def generate_motion(
     driving_audio_path,
     emotion_name,
     cfg_scale,
-    existing_run_behavior,    # new radio control
-    user_tag,                 # optional tag to include in hash
+    existing_run_behavior,
+    user_tag,
     progress=gr.Progress(track_tqdm=True),
     request: gr.Request = None,
 ):
@@ -374,7 +377,8 @@ def generate_motion(
 
     gr.Info(f"Done in {time.time()-start_time:.2f}s → {result_path}")
     logs.append(f"Done in {time.time()-start_time:.2f}s → {result_path}")
-    return result_path, "\n".join(logs)
+    progress_html = "<progress value='100' max='100' style='width:100%'></progress>"
+    return result_path, progress_html, logs[-1]
 
 # --- UI ---
 with gr.Blocks(theme=gr.themes.Soft(), css=".gradio-container {max-width:960px;margin:0 auto}") as demo:
@@ -406,14 +410,17 @@ with gr.Blocks(theme=gr.themes.Soft(), css=".gradio-container {max-width:960px;m
 
         with gr.Column(scale=1):
             output_video = gr.Video(label="Generated Video")
+            progress_bar = gr.HTML(value="<progress value='0' max='100' style='width:100%'></progress>", label="Progress")
+            logs_box = gr.Textbox(label="Logs", interactive=False)
 
     gr.Markdown("---\n### Disclaimer\nAcademic use only. Users are liable for generated content.")
 
     submit_button.click(
         fn=generate_motion,
         inputs=[source_image, driving_audio, emotion_dropdown, cfg_slider, existing_run_behavior, user_tag],
-        outputs=[output_video]
+        outputs=[output_video, progress_bar, logs_box]
     )
+
 
 if __name__ == "__main__":
     demo.launch(share=True)
