@@ -472,13 +472,11 @@ with gr.Blocks(theme=gr.themes.Soft(), css=".gradio-container {max-width:960px;m
                 with gr.Column(scale=1, min_width=450):
                     gr.Markdown("### 📺 Output")
                     output_video = gr.Video(label="Generated Video")
-
-            # hidden initially
-            status_box = gr.Textbox(
-                label="Status / Logs",
-                interactive=False,
-                visible=False
-            )
+                    status_box = gr.Textbox(
+                        label="Logs",
+                        interactive=False,
+                        visible=False
+                    )
 
         with gr.Tab("ℹ️ About"):
             gr.Markdown(
